@@ -1,0 +1,29 @@
+<clickhouse>
+  <!-- Docs: <https://clickhouse.com/docs/operations/settings/settings_users/> -->
+  <users>
+    <robot>
+      <profile>default</profile>
+      <networks>
+        <ip>::/0</ip>
+        <ip>0.0.0.0/0</ip>
+      </networks>
+      <password><![CDATA[robot123]]></password>
+      <quota>default</quota>
+      <grants>
+        <query> 
+            GRANT developer
+        </query>
+      </grants>
+    </robot>
+  </users>
+
+  <roles>
+    <developer>
+        <grants>
+            <query>
+                GRANT SELECT, INSERT ON gitforgex.*
+            </query>
+        </grants>
+    </developer>
+  </roles>
+</clickhouse>

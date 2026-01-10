@@ -1,0 +1,64 @@
+
+services:
+  gitserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    
+    image: gitforgex:1
+    container_name: gitforgex
+    ports:
+      - protocol: TCP
+        target: 8000
+        published: 8000
+    networks:
+      gitforgex.network:
+        ipv4_address: 10.0.0.22
+    depends_on:
+      - dbserver
+  
+  dbserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.clickhouse
+    image: clickhouse-gitforgex:1
+    container_name: clickhouse
+    volumes:
+      - type: bind
+        source: docker-entrypoint-initdb.d/init.sql
+        target: /docker-entrypoint-initdb.d/init.sql
+        read_only: true
+      - type: bind
+        source: users.d/
+        target: /etc/clickhouse-server/users.d/
+        read_only: true
+      - type: bind
+        source: config.xml
+        target: /etc/clickhouse-server/config.xml
+        read_only: true
+    ports:
+      - protocol: TCP
+        target: 9000
+        published: 9000
+      - protocol: TCP
+        target: 8123
+        published: 8123
+    networks:
+      gitforgex.network:
+        ipv4_address: 10.0.0.21
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'select 1'"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 5s
+networks:
+  gitforgex.network:
+    name: gitforgex.network
+    driver: bridge
+    enable_ipv4: true
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 10.0.0.0/16
+          gateway: 10.0.0.20

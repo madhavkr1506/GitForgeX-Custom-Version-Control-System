@@ -1,0 +1,66 @@
+FROM python:3.13
+
+USER root
+
+RUN apt update -y && apt install adduser curl -y
+
+RUN groupadd -r helper && useradd -r -g helper bot
+
+RUN mkdir -p /home/bot
+
+RUN chown -R bot:helper /home/bot
+
+RUN pip install --upgrade pip
+
+WORKDIR /src/app/.git
+
+RUN chown -R bot:helper /src/app/.git
+
+RUN chmod 700 /src/app/.git
+
+USER bot
+
+RUN mkdir -p /src/app/.git/snapshots
+RUN chmod 700 /src/app/.git/snapshots
+
+RUN mkdir -p /src/app/.git/commit_hash
+RUN chmod 700 /src/app/.git/commit_hash
+
+RUN mkdir -p /src/app/.git/deleted_commit_hash
+RUN chmod 700 /src/app/.git/deleted_commit_hash
+
+RUN mkdir -p /src/app/.git/deleted_snapshots
+RUN chmod 700 /src/app/.git/deleted_snapshots
+
+RUN mkdir -p /src/app/.git/API
+RUN chmod 700 /src/app/.git/API
+
+RUN mkdir -p /src/app/.git/Actions
+RUN chmod 700 /src/app/.git/Actions
+
+RUN mkdir -p /src/app/.git/Identity
+RUN chmod 700 /src/app/.git/Identity
+
+RUN mkdir -p /src/app/.git/Keystores
+RUN chmod 700 /src/app/.git/Keystores
+
+COPY ./API/interface.py /src/app/.git/API/interface.py
+
+COPY ./Actions/botAction.py /src/app/.git/Actions/botAction.py
+
+COPY ./Identity/botVerification.py /src/app/.git/Identity/botVerification.py
+
+COPY requirements.txt /src/app/.git/requirements.txt
+
+COPY requirements.clickhouse.txt /src/app/.git/requirements.clickhouse.txt
+
+RUN pip install -r /src/app/.git/requirements.txt
+
+RUN pip install -r /src/app/.git/requirements.clickhouse.txt
+
+EXPOSE 8000/tcp
+
+CMD [ "python", "-m", "API.interface" ]
+
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \ 
+CMD curl -kf http://localhost:8000 || exit 1
