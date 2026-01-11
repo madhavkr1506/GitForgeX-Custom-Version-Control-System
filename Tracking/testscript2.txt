@@ -1,11 +1,13 @@
-hi i am testing my server and this is second test file
+def print():
+    print("My name is krishn kumar")
 
-hi i am testing my server and this is second test file
+def message():
+    print("version control project")
 
-hi i am testing my server and this is second test file
+def change1():
+    print("hi new change)
 
-hi i am testing my server and this is second test file
-hi i am testing my server and this is second test file
+first I will add some change in this folder
 
-hi i am testing my server and this is second test file
-hi i am testing my server and this is second test file
+def change2():
+    print("hi new  new change)

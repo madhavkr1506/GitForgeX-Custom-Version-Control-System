@@ -16,7 +16,7 @@ class GitClone:
                 "curl",
                 "-X",
                 "GET",
-                "http://localhost:8000/get/cea50087a32fa020ffb4b13145f32ce94c3ce237ed74a54a33040999321d3d1f",
+                "http://localhost:8000/get/92f21be4d8b290637e93c4b9790a03bec823c6e6e218ac7b925c3e6f753fd69a",
                 "-o", "./clonedir/testscript2.txt"
             ]
             print(f"command: {cmd}")

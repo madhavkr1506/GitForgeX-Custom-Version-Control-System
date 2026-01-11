@@ -108,7 +108,7 @@ class UserAction:
                     case "clone":
                         GitClone()
                     case "cherry-pick":
-                        pass
+                        PickCommit().run()
                     case "revert":
                         pass
                     case "handshake":

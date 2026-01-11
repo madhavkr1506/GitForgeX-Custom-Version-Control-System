@@ -1,18 +1,12 @@
-hi this is test message
-hi i am testing my server connection
+def print():
+    print("My name is madhav kumar")
+
+def message():
+    print("version control project")
+
+def change():
+    print("this is new change")
 
 
-hi i am making one more trial
-hi i am making one more trial
-
-hi i am making one more trial
-
-hi i am making one more trial
-hi i am making one more trial
-
-hi i am making one more trial
-
-hi i am making one more trial
-
-hi i am making one more trial
-hi i am making one more trial
+def greeting():
+    print("good morning madhav this is new change")

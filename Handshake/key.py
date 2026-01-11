@@ -328,6 +328,7 @@ class KeyGeneration:
                 "response": f"handshake failed with server: {str(e)}",
                 "r_status": "failed"  
             })
+        
     
     def phrase_server_response(self, server_response):
         try:

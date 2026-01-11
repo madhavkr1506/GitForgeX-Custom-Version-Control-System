@@ -1,5 +1,5 @@
 import pandas as pd
-import subprocess, json
+import subprocess, json, sys
 from datetime import datetime
 from Metadata.filesMeta import Master
 from Handshake.key import KeyGeneration
@@ -28,11 +28,11 @@ class Push:
         self.push_event_aftermath_status = False
 
     def run(self):
-        self.validate_identity_with_handshake()
-
-        steps = [self.list_entry_to_push, self.push_event_util, self.push_event_aftermath, self.reset_status]
-        for step in steps:
-            step()
+        flag = self.validate_identity_with_handshake()
+        if flag:
+            steps = [self.list_entry_to_push, self.push_event_util, self.push_event_aftermath, self.reset_status]
+            for step in steps:
+                step()
 
     def validate_identity_with_handshake(self):
         try:
@@ -41,6 +41,8 @@ class Push:
             funcs = [self.handshake.run, self.handshake.do_handshake]
             for fun in funcs:
                 fun()
+            
+            return True
 
         except Exception as e:
             self.log.error(
@@ -49,6 +51,7 @@ class Push:
                     "u_status": "failed"
                 }, indent=4)
             )
+            return False
 
     def list_entry_to_push(self):
         try:
@@ -137,7 +140,7 @@ class Push:
             self.log.info(
                 json.dumps(
                     {
-                        "response": f"pust event status is not set to true",
+                        "response": f"post event status is not set to true",
                         "u_status": "failed"
                     }, indent=4
                 )
