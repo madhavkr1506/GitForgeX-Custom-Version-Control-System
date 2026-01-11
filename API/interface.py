@@ -31,14 +31,20 @@ class MainHandler(web.RequestHandler):
         response = verification.verify_robot_identity()
         if response.get("status") == "success":
             print(f"success verification: {response}", flush=True)
-            commit_hash = self.get_body_argument("commit_hash")
-            print(f"commit hash: {commit_hash}", flush=True)
+            commithash = self.get_body_argument("commit_hash")
             filehash = self.get_body_argument("filehash")
-            print(f"filehash: {filehash}", flush=True)
             commitmsg = self.get_body_argument("commitmsg")
-            print(f"commit message: {commitmsg}", flush=True)
             filepath = f"./snapshots/{filehash}"
-            print(f"filepath: {filepath}", flush=True)
+            print(
+                json.dumps(
+                    {
+                        "commit hash": f"{commithash}",
+                        "file hash": f"{filehash}",
+                        "commit message": f"{commitmsg}",
+                        "remote file path": f"{filepath}"
+                    }, indent=4, sort_keys=True
+                ), flush=True
+            )
 
             body = self.request.files.get("upload")[0].get("body")
             if body is not None:
@@ -48,7 +54,7 @@ class MainHandler(web.RequestHandler):
                     "message": f"{filepath} has been saved successfully",
                     "status": "success"
                 }
-                self.robot.insert_indb(commithash=commit_hash, fileshash=filehash, commitmsg=commitmsg)
+                self.robot.insert_indb(commithash=commithash, fileshash=filehash, commitmsg=commitmsg)
                 self.write(json.dumps(response, indent=4))
             else:
                 response = {
@@ -100,10 +106,12 @@ class HandshakeHandler(web.RequestHandler):
         pufile.close()
 
         self.write(
-            {
-                "response": "public key is store on server",
-                "b_status": "success"
-            }
+            json.dumps(
+                {
+                    "response": "congratulation::) public key is store on server and ready to validate signature",
+                    "b_status": "success"
+                }, indent=4
+            ),
         )
 
     
@@ -116,15 +124,33 @@ class TestHandler(web.RequestHandler):
     def get(self):
         response = self.verification.verify_robot_identity()
         if response.get("status") == "success":
-            print(f"success verification: {response}", flush=True)
+            print(
+                json.dumps(
+                    {
+                        "response": f"verification success: {response}"
+                    }
+                ), flush=True
+            )
             
             response = self.dbconnection.test_session_reliablity()
 
-            print(f"database test response: {response}", flush=True)
+            print(
+                json.dumps(
+                    {
+                        "response": f"session connection : {response}"
+                    }
+                )
+                , flush=True)
             self.set_status(200)
             self.finish(f"ping received...")
         else:
-            print(f"failed verification: {response}", flush=True)
+            print(
+                json.dumps(
+                    {
+                        "response": f"verification failed: {response}"
+                    }
+                )
+                , flush=True)
             self.write(response)
 
 def make_app():
@@ -145,14 +171,14 @@ def main():
             "message": "server is listening on port 8000",
             "status": "success"
         }
-        print(json.dumps(response, indent=4))
+        print(json.dumps(response, indent=4), flush=True)
 
     except Exception as e:
         response = {
             "message": f"{str(e)}",
             "status": "failure"
         }
-        print(json.dumps(response, indent=4))
+        print(json.dumps(response, indent=4), flush=True)
 
 
 if __name__ == "__main__":
