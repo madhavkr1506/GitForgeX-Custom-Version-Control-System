@@ -1,4 +1,2 @@
 def print():
     print("My name is krishn kumar")
-
-0

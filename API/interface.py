@@ -9,19 +9,49 @@ from Actions.botAction import *
 class MainHandler(web.RequestHandler):
     def initialize(self):
         self.robot = BotHandler()
+        self.filehash = None
+        self.commit_hash = None
 
-    def get(self, hash):
+    def get(self):
         verification = Verification(verify_bot=True)
         response = verification.verify_robot_identity()
         if response.get("status") == "success":
             print(f"success verification: {response}", flush=True)
-            filename = f"./snapshots/{hash}"
-            data = None
-            with open(file=filename, mode="rb") as file:
-                data = file.read()
+            filehash = self.get_body_argument(name="filehash", default="not found", strip=True)
+            if filehash == "not found":
+                print(f"filehash is not given. using commit hash", flush=True)
+            self.filehash = filehash
+            commit_hash = self.get_body_argument(name="commit_hash", default="not found", strip=True)
+            if commit_hash == "not found":
+                print(f"commit hash is not given", flush=True)
+            self.commit_hash = commit_hash
+            if len(self.filehash) == 0 and len(self.commit_hash) == 0:
+                self.write(chunk={
+                    "response": "invalid parameter. get operation failed",
+                    "b_status": "failed"
+                })
+                return
 
-            if data is not None:
-                self.write(data)
+            rows = self.robot.select_fromdb(commithash=commit_hash)
+            if rows:
+                for row in rows:
+                    filehash = row[0][0]
+                    filepath = f"./snapshots/{filehash}"
+                    if os.path.exists(path=filepath):
+                        data = None
+                        with open(file=filepath, mode="rb") as file:
+                            data = file.read()
+                        if data:
+                            self.write(data)
+                    else:
+                        self.set_status(404)
+                        self.finish("resource not found")
+                        return
+            else:
+                self.set_status(404)
+                self.finish("no commit history found")
+                return
+            self.finish()
         else:
             print(f"failed verification: {response}", flush=True)
             self.write(response)
@@ -156,7 +186,7 @@ class TestHandler(web.RequestHandler):
 def make_app():
     return web.Application([
         (r"/", TestHandler),
-        (r"/get/([a-zA-Z0-9]+)", MainHandler),
+        (r"/get", MainHandler),
         (r"/post", MainHandler),
         (r"/handshake", HandshakeHandler),
         (r"/store-pu-key", HandshakeHandler)

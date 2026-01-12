@@ -17,6 +17,7 @@ services:
     env_file:
       - path: db.credentials.env
         required: true
+    restart: unless-stopped
     depends_on:
       - dbserver
   
@@ -39,6 +40,9 @@ services:
         source: config.xml
         target: /etc/clickhouse-server/config.xml
         read_only: true
+      - type: volume
+        source: clickhouse.data
+        target: /var/lib/clickhouse/
     ports:
       - protocol: TCP
         target: 9000
@@ -55,6 +59,7 @@ services:
       timeout: 30s
       retries: 3
       start_period: 5s
+    restart: unless-stopped
 networks:
   gitforgex.network:
     name: gitforgex.network
@@ -65,3 +70,6 @@ networks:
       config:
         - subnet: 10.0.0.0/16
           gateway: 10.0.0.20
+
+volumes:
+  clickhouse.data:

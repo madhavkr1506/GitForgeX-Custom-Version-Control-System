@@ -113,6 +113,8 @@ class UserAction:
                         PickCommit().run()
                     case "revert":
                         pass
+                    case "reset":
+                        GitReset().run()
                     case "handshake":
                         KeyGeneration()
                     case "exit":

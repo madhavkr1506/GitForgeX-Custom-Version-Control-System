@@ -183,7 +183,7 @@ class PrepareQuery:
 
     def prepare_select(self, commithash):
         query = Select(
-            ModelClass
+            ModelClass.git_files_hash
         ).where(ModelClass.git_commithash == commithash)
         self.select_query = query
 
@@ -291,7 +291,7 @@ class BotHandler:
                     }, indent=4), flush=True)
                 
         except Exception as e:
-            if self.session is not None:
+            if self.session:
                 self.session.rollback()
                 self.session.close()
             print(json.dumps({
@@ -299,17 +299,34 @@ class BotHandler:
                 "b_status": "failed"
             }, indent=4))
 
-    def select_fromdb(self):
+    def select_fromdb(self, commithash):
         try:
-            pass
+            self.prepare_query.prepare_select(commithash=commithash)
+            query = self.prepare_query.select_query
+            print(f"select query: {query}", flush=True)
+            if self.session:
+                response = self.session.execute(query)
+                print(f"response: {response}", flush=True)
+                print(f"response type: {type(response)}", flush=True)
+                rows = response.fetchall()
+                if rows:
+                    for row in rows:
+                        print(f"fetched row: {row}", flush=True)
+                else:
+                    print(f"rows are not found: {rows}", flush=True)
+                return rows
+            else:
+                print(f"session is not initialized", flush=True)
         except Exception as e:
+            if self.session:
+                self.session.close()
             print(json.dumps(
                 {
                     "response": f"select operation not completed: {str(e)}",
                     "b_status": "failed"
                 }, indent=4
             ))
-        
+            
 class Handshake:
     def __init__(self, signature : str = None, vamessage : str = None):
         self.signature = signature
