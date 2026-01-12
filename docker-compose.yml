@@ -14,6 +14,9 @@ services:
     networks:
       gitforgex.network:
         ipv4_address: 10.0.0.22
+    env_file:
+      - path: db.credentials.env
+        required: true
     depends_on:
       - dbserver
   

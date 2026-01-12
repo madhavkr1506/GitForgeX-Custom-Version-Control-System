@@ -28,11 +28,11 @@ class DBConnection:
         self.prepare_database_variables()
 
     def prepare_database_variables(self):
-        self.database_user = "robot"
-        self.database_name = "gitforgex"
-        self.db_hostport = "9000"
-        self.db_hostipaddr = "10.0.0.21"
-        self.db_password = "robot123"
+        self.database_user = str(os.getenv("USERNAME")).lower()
+        self.database_name = str(os.getenv("DATABASE")).lower()
+        self.db_hostport = str(os.getenv("PORT")).lower()
+        self.db_hostipaddr = str(os.getenv("HOST")).lower()
+        self.db_password = str(os.getenv("PASSWORD")).lower()
 
     def create_dbengine(self):
         try:
