@@ -1,13 +1,9 @@
 import os
 import platform
 import subprocess
-from Metadata.filesMeta import Master
 
 class GitClone:
     def __init__(self):
-        self.master = Master()
-        self.filepath = self.master.filepath
-
         self.get_cmd = None
 
     def prepare_get_cmd(self, filehash=None, commithash=None):
@@ -19,7 +15,7 @@ class GitClone:
                 "http://localhost:8000/get/92f21be4d8b290637e93c4b9790a03bec823c6e6e218ac7b925c3e6f753fd69a",
                 "-o", "./clonedir/testscript2.txt"
             ]
-            print(f"command: {cmd}")
+            print(f"command: {cmd}")            
             self.get_cmd = cmd
         except Exception as e:
             raise Exception(str(e))

@@ -1,67 +1,93 @@
 import sys
-import pandas as pd
+import json
+from pathlib import Path
+from Metadata import *
+from Logging import *
 from cryptography.hazmat.primitives import hashes
-from Metadata.filesMeta import Master
+from Metadata import *
 
 class Commit:
     def __init__(self):
-        self.master = Master()
-        self.filepath = self.master.filepath
+        log = PrintLog()
+        self.log = log.log
 
-        self.read_csv = None
+        self.worktreepath = Path("./.gitforgex/")
 
-        self.staged_count = 0
         self.commit_required = False
-        self.commit_message = ""
-
-        self.commit_hash_hex = ""
+        self.hashinputs = []
+        self.commit_hash = None
+        self.commit_msgs = None
 
     def run(self):
-        steps = [self.check_commit_required, self.get_commit_hash, self.get_commit_message, self.add_commit_message, self.add_commit_hash]
+        steps = [self.check_commit_required, self.get_commit_hash, self.get_commit_message, self.changing_entry_state]
         for step in steps:
             step()
 
+    def reading_entry_state(self, filepath):
+        try:
+            contents = None,
+            with open(file=filepath, mode="r") as jsonfile:
+                contents = json.load(jsonfile)
+            jsonfile.close()
+            return contents
+
+        except Exception as e:
+            self.log.error(
+                "binary reading failed"
+            )
+
+    def updating_entry_state(self, filepath, payload):     
+        with open(file=filepath, mode="w") as jsonfile:
+            json.dump(payload, jsonfile, indent=4)
+        jsonfile.close()
+
+        self.log.info(f"commit state is updated: {filepath}")
+
     def check_commit_required(self):
-        self.read_csv = pd.read_csv(self.filepath)
-        tracked_count = self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True), "FILE.TRACK.STATUS"].count()
-        if tracked_count == 0:
-            self.commit_required = False
-            return
-        self.commit_required = True
-        return
+        for filepath in self.worktreepath.glob("**/*"):
+            if filepath.is_dir() or "cache" in str(filepath):
+                continue
+
+            contents = self.reading_entry_state(filepath=filepath)     
+
+            current_staged = contents.get("current").get("staged")
+            current_tracked = contents.get("current").get("tracked")
+            current_hash = contents.get("current").get("hash")
+            if (current_tracked and current_staged):
+                self.commit_required = True
+                self.hashinputs.append(current_hash)
+                
 
     def get_commit_hash(self):
         if self.commit_required:
-            hash_digest = hashes.Hash(algorithm=hashes.SHA256())
-            f_data_hash_hex = self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True), "FILE.HASH"]
-            combined_f_data_hash_hex = "".join(f_data_hash_hex)
-            print(f"Combined input data hash hex: {combined_f_data_hash_hex}")
-            hash_digest.update(combined_f_data_hash_hex.encode("UTF-8"))
-            hash_bytes_fmt = hash_digest.finalize()
-            print(f"Hash bytes format: {hash_bytes_fmt}")
-            self.commit_hash_hex = hash_bytes_fmt.hex()
-            print(f"Commit hash hex: {self.commit_hash_hex}")
+            hashsha256 = hashes.Hash(algorithm=hashes.SHA256())
+            hashinputs = "".join(self.hashinputs)
+            hashinputs = hashinputs.encode("UTF-8")
+            hashsha256.update(hashinputs)
+            hashdigest = hashsha256.finalize()
+            hash256hex = hashdigest.hex()
+            self.commit_hash = hash256hex
+
 
     def get_commit_message(self):
         if self.commit_required:
             print(f"Input commit message: ", end="\t", flush=True)
             input = sys.stdin.readline()
-            self.commit_message = input.strip()
+            self.commit_msgs = input.strip()
 
-    def add_commit_message(self):
-        if self.commit_message == "":
-            self.commit_message = self.commit_hash_hex
+    def changing_entry_state(self):
+        if self.commit_msgs is not None and self.commit_hash is not None:
+            for filepath in self.worktreepath.glob("**/*"):
+                if filepath.is_dir() or "cache" in str(filepath):
+                    continue
+                contents = self.reading_entry_state(filepath=filepath)
+                current_staged = contents.get("current").get("staged")
+                current_tracked = contents.get("current").get("tracked")
+                if (current_staged and current_tracked):
+                    contents["current"]["commit_hash"] = self.commit_hash
+                    contents["current"]["message"] = self.commit_msgs
 
-        self.read_csv.loc[self.read_csv["FILE.STAGE.STATUS"] == True, "FILE.COMMIT.MESSAGE"] = self.commit_message
-        self.read_csv.to_csv(self.filepath, header=False, index=False)
-
-    def add_commit_hash(self):
-        try:
-            if self.commit_hash_hex == "" or self.commit_hash_hex is None:
-                return
-            
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == False), "FILE.COMMIT.HASH"] = self.commit_hash_hex
-
-            self.read_csv.to_csv(self.filepath, index=False)
-        except Exception as e:
-            raise Exception(str(e))
+                    self.updating_entry_state(filepath=filepath, payload=contents)
+                    self.log.info(
+                        "changes are in commit mode\nchanges are in tracking mode"
+                    )

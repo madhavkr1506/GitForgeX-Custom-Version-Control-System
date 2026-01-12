@@ -1,13 +1,2 @@
 def print():
     print("My name is krishn kumar")
-
-def message():
-    print("version control project")
-
-def change1():
-    print("hi new change)
-
-first I will add some change in this folder
-
-def change2():
-    print("hi new  new change)

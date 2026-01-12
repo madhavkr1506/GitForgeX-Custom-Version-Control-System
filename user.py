@@ -1,10 +1,12 @@
+import os
+import sys
+import json 
+import subprocess
 
-import os, sys, subprocess, json
-from pathlib import Path
-
+from pathlib import *
 from Logging import *
-from GitActions import *
 from Handshake import *
+from GitActions import *
 
 class UserAction:
     def __init__(self):
@@ -98,7 +100,7 @@ class UserAction:
                 self.get_user_action()
                 match self.user_action:
                     case "add":
-                        Action().add(track_dir_path=Path("./Tracking"))
+                        AddActions(path=Path("./Tracking"))
                     case "stage":
                         Staging().run()
                     case "commit":

@@ -10,3 +10,6 @@ def change():
 
 def greeting():
     print("good morning madhav this is new change")
+
+def greeting():
+    print("good morning madhav this is new change")

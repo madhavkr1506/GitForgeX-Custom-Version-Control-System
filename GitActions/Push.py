@@ -1,36 +1,31 @@
-import pandas as pd
-import subprocess, json, sys
-from datetime import datetime
-from Metadata.filesMeta import Master
-from Handshake.key import KeyGeneration
-
+import json
+import subprocess
 from Logging import *
+from Handshake import *
+from pathlib import Path
+from datetime import datetime
 
 class Push:
     def __init__(self):
         self.log = PrintLog()
         self.log = self.log.log
 
-        self.master = Master()
-        self.filepath = self.master.filepath
+        self.contents = {}
 
-        self.read_csv = None
+        self.worktreepath = Path("./.gitforgex/")
 
-        self.filepaths = None
         self.commit_hash = None
-        self.commit_message = None
+        self.commit_msgs = None
 
-        self.get_cmd = None
-        self.post_cmd = None
+        self.post_command = None
 
-        self.push_event_status = False
-        self.prepare_post_cmd_status = True
-        self.push_event_aftermath_status = False
+        self.push_status = False
 
     def run(self):
         flag = self.validate_identity_with_handshake()
+        flag = True
         if flag:
-            steps = [self.list_entry_to_push, self.push_event_util, self.push_event_aftermath, self.reset_status]
+            steps = [self.find_commit_hash_and_commit_message, self.push_event_util, self.changing_entry_state]
             for step in steps:
                 step()
 
@@ -52,13 +47,49 @@ class Push:
                 }, indent=4)
             )
             return False
-
-    def list_entry_to_push(self):
+    def reading_entry_state(self, filepath):
         try:
-            self.read_csv = pd.read_csv(self.filepath)
+            contents = None,
+            with open(file=filepath, mode="r") as jsonfile:
+                contents = json.load(jsonfile)
+            jsonfile.close()
+            self.contents = contents
 
-            self.commit_hash = self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == False) & (self.read_csv["FILE.MODIFIED"] == True), "FILE.COMMIT.HASH"].unique()
-            self.commit_message = self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == False) & (self.read_csv["FILE.MODIFIED"] == True), "FILE.COMMIT.MESSAGE"].unique()
+        except Exception as e:
+            self.log.error(
+                "binary reading failed"
+            )
+
+    def updating_entry_state(self, filepath, payload):     
+        with open(file=filepath, mode="w") as jsonfile:
+            json.dump(payload, jsonfile, indent=4)
+        jsonfile.close()
+
+        self.log.info(f"push state is updated: {filepath}")
+
+    def find_commit_hash_and_commit_message(self):
+        try:
+            commit_hash_list = []
+            commit_msgs_list = []
+            for filepath in self.worktreepath.glob("**/*"):
+                if filepath.is_dir() or "cache" in str(filepath):
+                    continue
+                self.reading_entry_state(filepath=filepath)
+                current_tracked = self.contents.get("current").get("tracked")
+                current_staged = self.contents.get("current").get("staged")
+                current_committed = self.contents.get("current").get("committed")
+                current_modified = self.contents.get("current").get("modified")
+
+                if (current_tracked and current_staged and not current_committed and current_modified):
+                    current_commit_hash = self.contents.get("current").get("commit_hash")
+                    current_commit_msgs = self.contents.get("current").get("message")
+                    commit_hash_list.append(current_commit_hash)
+                    commit_msgs_list.append(current_commit_msgs)
+
+            if len(set(current_commit_hash)) == 1 and len(set(current_commit_msgs)) == 1:
+                self.commit_hash = current_commit_hash[0]
+                self.commit_msgs = current_commit_msgs[0]
+             
         except Exception as e:
             self.log.error(
                 json.dumps(
@@ -76,12 +107,12 @@ class Push:
                 "-X", "POST",
                 "http://localhost:8000/post",
                 "-F", f"upload=@{filepath}",
-                "-F", f"commit_hash={self.commit_hash[0]}",
+                "-F", f"commit_hash={self.commit_hash}",
                 "-F", f"filehash={filehash}",
-                "-F", f"commitmsg={self.commit_message[0]}"
+                "-F", f"commitmsg={self.commit_msgs}"
             ]
-            print(f"post command prepared: {cmd}")
-            self.post_cmd = cmd
+            self.post_command = cmd
+            print(f"post command prepared: {self.post_command}")
         except Exception as e:
             self.log.error(
                 json.dumps(
@@ -95,13 +126,13 @@ class Push:
     def get_push_event(self):
         try:
             response = subprocess.run(
-                self.post_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+                self.post_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True
             )
             if response.returncode == 0:
                 print(f"Standard output: {response.stdout}")
                 return
             print(f"Standard error: {response.stderr}")
-            self.push_event_status = False
+            self.push_status = False
             return
         except Exception as e:
             self.log.error(
@@ -115,16 +146,22 @@ class Push:
         
     def push_event_util(self):
         try:
-            for idx, row in self.read_csv.iterrows():
-                entry, filehashhex = (row.get("FILE.PATH"), row.get("FILE.HASH")) if row.get("FILE.TRACK.STATUS") == True and row.get("FILE.STAGE.STATUS") == True and row.get("FILE.COMMIT.STATUS") == False else (None, None)
-                print(f"filepath: {entry}\nfilehash: {filehashhex}")
-
-                if entry is None:
+            for filepath in self.worktreepath.glob("**/*"):
+                if filepath.is_dir() or "cache" in str(filepath):
                     continue
-                
-                self.get_post_cmd(filepath=entry, filehash=filehashhex)
-                self.get_push_event()
-                self.push_event_status = True
+                self.reading_entry_state(filepath=filepath)
+                current_staged = self.contents.get("current").get("staged")
+                current_committed = self.contents.get("current").get("committed")
+                current_tracked = self.contents.get("current").get("tracked")
+
+                if (current_staged and current_tracked and not current_committed):
+                    filepath_ = self.contents.get("path")
+                    filehash_ = self.contents.get("current").get("hash")
+                    if filepath_ is None:
+                        continue
+                    self.get_post_cmd(filepath=filepath_, filehash=filehash_)
+                    self.get_push_event()
+                    self.push_status = True
         except Exception as e:
             self.log.error(
                 json.dumps(
@@ -135,53 +172,28 @@ class Push:
                 )
             )
         
-    def push_event_aftermath(self):
-        if not self.push_event_status:
-            self.log.info(
-                json.dumps(
-                    {
-                        "response": f"post event status is not set to true",
-                        "u_status": "failed"
-                    }, indent=4
-                )
-            )
+    def changing_entry_state(self):
+        if not self.push_status:
+            self.log.info("push event is not set to true")
             return
-        try:
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == False), "FILE.COMMIT.STATUS"] = True
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.COMMIT.DATETIME"] = str(datetime.now())
 
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.LAST.TRACK.STATUS"] = True
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.LAST.STAGE.STATUS"] = True
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.LAST.COMMIT.STATUS"] = True
-
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.LAST.COMMIT.MESSAGE"] = self.commit_message[0]
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.LAST.COMMIT.HASH"] = self.commit_hash[0]
-            
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.LAST.COMMIT.DATETIME"] = str(datetime.now())
-
-            self.read_csv.to_csv(self.filepath, index=False)
-            self.push_event_aftermath_status = True
-        except Exception as e:
-            self.push_event_aftermath_status = False
-
-    def reset_status(self):
-        if not self.push_event_aftermath_status:
-            json.dumps(
-                {
-                    "response": f"push event aftermath status is not set to true",
-                    "u_status": "failed"
-                }, indent=4
-            )
-            return
-        try:
+        for filepath in self.worktreepath.glob("**/*"):
+            if filepath.is_dir() or "cache" in str(filepath):
+                continue
         
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.COMMIT.DATETIME"] = None
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == True), "FILE.COMMIT.STATUS"] = False
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == True) & (self.read_csv["FILE.COMMIT.STATUS"] == False), "FILE.STAGE.STATUS"] = False
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.STAGE.STATUS"] == False) & (self.read_csv["FILE.COMMIT.STATUS"] == False), "FILE.TRACK.STATUS"] = False
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == False) & (self.read_csv["FILE.STAGE.STATUS"] == False) & (self.read_csv["FILE.COMMIT.STATUS"] == False), "FILE.MODIFIED"] = False
+            self.reading_entry_state(filepath=filepath)
+            current_staged = self.contents.get("current").get("staged")
+            current_tracked = self.contents.get("current").get("tracked")
+            if (current_tracked and current_staged):
+                self.contents["current"]["committed"] = True
+                self.contents["current"]["commit_time"] = str(datetime.now())
+                self.contents["last"]["size"] = self.contents["current"]["size"]
+                self.contents["last"]["tracked"] = self.contents["current"]["tracked"]
+                self.contents["last"]["staged"] = self.contents["current"]["staged"]
+                self.contents["last"]["committed"] = self.contents["current"]["committed"]
+                self.contents["last"]["message"] = self.contents["current"]["message"]
+                self.contents["last"]["commit_hash"] = self.contents["current"]["commit_hash"]
+                self.contents["last"]["commit_time"] = self.contents["current"]["commit_time"]
 
-            self.read_csv.to_csv(self.filepath, index=False)
-            self.push_event_aftermath = False
-        except Exception as e:
-            self.push_event_aftermath_status = True
+                self.updating_entry_state(filepath=filepath, payload=self.contents)
+                self.log.info("push state is updated")

@@ -1,48 +1,61 @@
 
-
-import pandas as pd
-from Metadata.filesMeta import Master
+import json
+from pathlib import *
+from Logging import *
 
 class Staging:
     def __init__(self):
-        self.master = Master()
-        self.filepath = self.master.filepath
+        self.log = PrintLog()
+        self.log = self.log.log
 
+        self.worktreepath = Path("./.gitforgex/")
         self.untracked_count = 0
-        self.read_csv = None
-    
     def run(self):
-        steps = [self.check_untracked, self.mark_staged]
+        steps = [self.staged_changes]
         for step in steps:
             step()
 
-    def check_untracked(self) -> bool:
-        if self.filepath is None:
-            return False
-        
-        self.read_csv = pd.read_csv(self.filepath)
-        print(f"file info\n{self.read_csv.head(2)}")
-
-        self.untracked_count = self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == False) & (self.read_csv["FILE.LAST.TRACK.STATUS"] == False) & (self.read_csv["FILE.LAST.COMMIT.STATUS"] == False), "FILE.TRACK.STATUS"].count()
-        print(f"untracked count: {self.untracked_count}")
-
-        if self.untracked_count != 0:
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == False) & (self.read_csv["FILE.LAST.TRACK.STATUS"] == False) & (self.read_csv["FILE.LAST.COMMIT.STATUS"] == False), "FILE.TRACK.STATUS"] = True
-            self.read_csv.loc[(self.read_csv["FILE.TRACK.STATUS"] == True) & (self.read_csv["FILE.LAST.TRACK.STATUS"] == False) & (self.read_csv["FILE.LAST.COMMIT.STATUS"] == False), "FILE.MODIFIED"] = True
-            self.read_csv.to_csv(self.filepath, index=False)
-            print(f"Changes are in tracking mode")
-            return
-        print(f"Changes are not in tracking mode")
-        return
-    
-    def mark_staged(self):
+    def reading_entry_state(self, filepath):
         try:
-            if self.untracked_count == 0:
-                print(f"No new changes found. Nothing to staged")
-
-            self.read_csv.loc[(self.read_csv["FILE.STAGE.STATUS"] == False) & (self.read_csv["FILE.TRACK.STATUS"] == True), "FILE.STAGE.STATUS"] = True
-            self.read_csv.to_csv(self.filepath, index=False)
-            print(f"Changes are in staging mode")
+            contents = None,
+            with open(file=filepath, mode="r") as jsonfile:
+                contents = json.load(jsonfile)
+            jsonfile.close()
+            return contents
 
         except Exception as e:
-            raise Exception(str(e))
+            self.log.error(
+                "binary reading failed"
+            )
+
+    def updating_entry_state(self, filepath, payload):     
+        with open(file=filepath, mode="w") as jsonfile:
+            json.dump(payload, jsonfile, indent=4)
+        jsonfile.close()
+
+        self.log.info(f"staging state is updated: {filepath}")
+
+
+    def staged_changes(self, filepath = None) -> bool:
+        for filepath in self.worktreepath.glob("**/*"):
+            if filepath.is_dir():
+                continue
+            contents = self.reading_entry_state(filepath=filepath)     
+                   
+            current_tracked = contents.get("current").get("tracked")
+            last_tracked = contents.get("last").get("tracked")
+            last_committed = contents.get("last").get("committed")
+
+            if not (current_tracked and last_tracked and last_committed):
+                self.untracked_count += 1
+                contents["current"]["staged"] = True
+                contents["current"]["modified"] = True
+                contents["current"]["tracked"] = True
+                self.updating_entry_state(filepath=filepath, payload=contents)
+                self.log.info(
+                    "changes are in staging mode\nchanges are in tracking mode"
+                )
+        if self.untracked_count > 0:
+            self.log.info(f"untracked count: {self.untracked_count}")
+
+

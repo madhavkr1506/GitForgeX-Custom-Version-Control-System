@@ -1,0 +1,24 @@
+{
+    "path": "Tracking\\testscript2.txt",
+    "current": {
+        "size": 248,
+        "hash": "0fd2e6450a8f471d8384628b858e49ceea0e7fc13c8f328a719292a853306bf4",
+        "modified": true,
+        "tracked": true,
+        "staged": true,
+        "committed": true,
+        "message": "test commit message",
+        "commit_hash": "1058180948ba43073abe063720870fb6c5716e07cbe7564db1db864ddbe0a0f8",
+        "commit_time": "2026-01-12 13:43:04.740296"
+    },
+    "last": {
+        "size": 248,
+        "hash": null,
+        "tracked": true,
+        "staged": true,
+        "committed": true,
+        "message": "test commit message",
+        "commit_hash": "1058180948ba43073abe063720870fb6c5716e07cbe7564db1db864ddbe0a0f8",
+        "commit_time": "2026-01-12 13:43:04.740296"
+    }
+}
