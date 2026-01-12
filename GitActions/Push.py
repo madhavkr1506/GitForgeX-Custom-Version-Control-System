@@ -80,25 +80,24 @@ class Push:
                 current_committed = self.contents.get("current").get("committed")
                 current_modified = self.contents.get("current").get("modified")
 
-                if (current_tracked and current_staged and not current_committed and current_modified):
+                if (current_tracked and current_staged and current_modified and not current_committed):
                     current_commit_hash = self.contents.get("current").get("commit_hash")
                     current_commit_msgs = self.contents.get("current").get("message")
                     commit_hash_list.append(current_commit_hash)
                     commit_msgs_list.append(current_commit_msgs)
 
-            if len(set(current_commit_hash)) == 1 and len(set(current_commit_msgs)) == 1:
-                self.commit_hash = current_commit_hash[0]
-                self.commit_msgs = current_commit_msgs[0]
+            if len(set(commit_hash_list)) == 1 and len(set(commit_msgs_list)) == 1:
+                self.commit_hash = commit_hash_list[0]
+                self.commit_msgs = commit_msgs_list[0]
+                self.push_status = True
+            else:
+                self.push_status = False
              
         except Exception as e:
-            self.log.error(
-                json.dumps(
-                    {
-                        "response": f"failed to list files that required push: {str(e)}",
-                        "u_status": "failed"
-                    }, indent=4
-                )
-            )
+            self.log.error(f"commit hash and commit message is not found: {str(e)}")
+        finally:
+            self.log.info(f"push status: {self.push_status}")
+            self.log.info(f"commit hash list: {commit_hash_list}\ncommit msgs list: {commit_msgs_list}")
         
     def get_post_cmd(self, filepath, filehash):
         try:            
@@ -135,17 +134,14 @@ class Push:
             self.push_status = False
             return
         except Exception as e:
-            self.log.error(
-                json.dumps(
-                    {
-                        "response": f"failed to push file data to server: {str(e)}",
-                        "u_status": "failed"
-                    }, indent=4
-                )
-            )
+            self.log.error(f"failed to push changes and snapshot to the server: {str(e)}")
         
     def push_event_util(self):
         try:
+            if not self.push_status:
+                self.log.info(f"no changes are staged and tracked. nothing to commit.")
+                return
+            
             for filepath in self.worktreepath.glob("**/*"):
                 if filepath.is_dir() or "cache" in str(filepath):
                     continue
@@ -163,18 +159,10 @@ class Push:
                     self.get_push_event()
                     self.push_status = True
         except Exception as e:
-            self.log.error(
-                json.dumps(
-                    {
-                        "response": f"failed to make push event: {str(e)}",
-                        "u_status": "failed"
-                    }, indent=4
-                )
-            )
+            self.log.error(f"failed to make push event for filepath={filepath} and error={str(e)}")
         
     def changing_entry_state(self):
         if not self.push_status:
-            self.log.info("push event is not set to true")
             return
 
         for filepath in self.worktreepath.glob("**/*"):
@@ -188,12 +176,23 @@ class Push:
                 self.contents["current"]["committed"] = True
                 self.contents["current"]["commit_time"] = str(datetime.now())
                 self.contents["last"]["size"] = self.contents["current"]["size"]
+                self.contents["last"]["hash"] = self.contents["current"]["hash"]
                 self.contents["last"]["tracked"] = self.contents["current"]["tracked"]
                 self.contents["last"]["staged"] = self.contents["current"]["staged"]
                 self.contents["last"]["committed"] = self.contents["current"]["committed"]
                 self.contents["last"]["message"] = self.contents["current"]["message"]
                 self.contents["last"]["commit_hash"] = self.contents["current"]["commit_hash"]
                 self.contents["last"]["commit_time"] = self.contents["current"]["commit_time"]
+
+                self.contents["current"]["size"] = -1
+                self.contents["current"]["hash"] = None
+                self.contents["current"]["modified"] = False
+                self.contents["current"]["tracked"] = False
+                self.contents["current"]["staged"] = False
+                self.contents["current"]["committed"] = False
+                self.contents["current"]["message"] = None
+                self.contents["current"]["commit_hash"] = None
+                self.contents["current"]["commit_time"] = None
 
                 self.updating_entry_state(filepath=filepath, payload=self.contents)
                 self.log.info("push state is updated")

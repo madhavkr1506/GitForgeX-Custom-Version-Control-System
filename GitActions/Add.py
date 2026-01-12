@@ -12,7 +12,9 @@ class AddActions:
 
         self.entries = []
 
-        self.worktreepath = "./.gitforgex/"
+        self.working_node = NodeReferenceState()
+
+        self.working_module = self.working_node.working_module
 
         self.list_allfiles(path=path)
         for filepath in self.entries:
@@ -22,16 +24,10 @@ class AddActions:
 
             duplicate_found = self.handle_duplicate_in_worktree(filepath=filepath, filesize=filesize, filehash=filehash)
             if duplicate_found:
-                self.log.info(json.dumps({
-                    "response" : f"no change in found in file and filepath: {str(filepath)} and duplicate found: {duplicate_found}",
-                    "u_status" : "failed"
-                }, indent=4))
+                self.log.info(f"no change in found in file and filepath: {str(filepath)} and duplicate found: {duplicate_found}")
                 continue
             else:
-                self.log.info(json.dumps({
-                    "response" : f"change found in file and filepath: {str(filepath)} and duplicate found: {duplicate_found}",
-                    "u_status" : "success"
-                }, indent=4))
+                self.log.info(f"change found in file and filepath: {str(filepath)} and duplicate found: {duplicate_found}")
 
             filenode = self.node_creation(filepath=filepath, filesize=filesize, filehash=filehash)
             self.build_binary_object(filenode=filenode)
@@ -47,19 +43,11 @@ class AddActions:
                     self.entries.append(entry)
 
             if self.entries is [] and len(self.entries) == 0:
-                self.log.info({
-                    "response" : f"files not found at {path}",
-                    "u_status" : "failed"
-                })
+                self.log.warning(f"entries are empty. no files found at path={path}")
                 return []
             return self.entries
         except Exception as e:
-            self.log.error(json.dumps(
-                {
-                    "response": f"failed list all files: {str(e)}",
-                    "u_status": "failed"
-                }
-            ))
+            self.log.error(f"list all files failed: {str(e)}")
     
     def fetch_filesize(self, filepath):
         f_size = os.path.getsize(filename=filepath)
@@ -93,58 +81,37 @@ class AddActions:
     
     def node_creation(self, filepath, filesize, filehash) -> MetaNode:
         try:
-            if not all(
-                [filepath, filesize, filehash]
-            ):
-                self.log.error(
-                    json.dumps(
-                        {
-                            "response": f"node is not created. missing required fields filepath={filepath} filesize={filesize} filehash={filehash}",
-                            "u_status": "failed"
-                        }, indent=4
-                    )
-                )
-            
+            if not all([filepath, filesize, filehash]):
+                self.log.error(f"node is not created. missing required fields filepath={filepath} filesize={filesize} filehash={filehash}")
+                return
             filenode = MetaNode(path=str(filepath), size=filesize, hash_=filehash)
             return filenode
 
         except Exception as e:
-            self.log.error(json.dumps(
-                {
-                    "response": f"node is not created: {str(e)}",
-                    "u_status": "failed"
-                }
-            ))
+            self.log.error(f"node creation failed: {str(e)}")
         
     def handle_duplicate_in_worktree(self, filepath = None, filesize = -1, filehash = None):
-        duplicate_found = False
-        filepathhash = self.fetch_filehash(contents=str(filepath))
-        filepath = Path(f"{self.worktreepath}/{filepathhash}/{filehash}")
-        if os.path.exists(filepath):
-            duplicate_found = True
-        return duplicate_found
+        try:
+            duplicate_found = False
+            filepathhash = self.fetch_filehash(contents=str(filepath))
+            filepath = Path(f"{self.working_module}/{filepathhash}/{filehash}.json")
+            if os.path.exists(path=filepath):
+                duplicate_found = True
+            return duplicate_found
+        except Exception as e:
+            self.log.error(f"handle duplicate in worktree failed: {str(e)}")
 
     def build_binary_object(self, filenode : MetaNode = None):
         try:
-            os.makedirs(name=self.worktreepath, exist_ok=True)
             filepath = filenode.path
             filepathhash = self.fetch_filehash(contents=str(filepath))
+            dirpath = os.path.join(self.working_module, filepathhash)
+            os.makedirs(name=dirpath, exist_ok=True)
             filehash = filenode.current.get("hash")
-            path = os.path.join(self.worktreepath, filepathhash, f"{filehash}.json")
-
-            payload = None
-            with open(file=path, mode="w") as binfile:
-                payload = filenode.__dict__
-                # payload = json.dumps(payload)
-                json.dump(payload, binfile, indent=4)
-            binfile.close()
-            payload = None
+            filepath = os.path.join(self.working_module, filepathhash, f"{filehash}.json")
+            payload = filenode.__dict__
+            with open(file=filepath, mode="w") as jsonfile:
+                json.dump(payload, jsonfile, indent=4)
+            jsonfile.close()
         except Exception as e:
-            self.log.error(
-                json.dumps(
-                    {
-                        "response": f"binary file is not created inside worktree: {str(e)}",
-                        "u_status": "failed"
-                    }, indent=4
-                )
-            )
+            self.log.error(f"binary object is not created: {str(e)}")

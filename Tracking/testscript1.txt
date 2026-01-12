@@ -1,15 +1,3 @@
 def print():
     print("My name is madhav kumar")
-
-def message():
-    print("version control project")
-
-def change():
-    print("this is new change")
-
-
-def greeting():
-    print("good morning madhav this is new change")
-
-def greeting():
-    print("good morning madhav this is new change")
+00
