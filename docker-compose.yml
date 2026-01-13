@@ -64,6 +64,23 @@ services:
       retries: 3
       start_period: 5s
     restart: unless-stopped
+
+  nginx.server:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    image: nginx-gitforgex:1
+    container_name: nginx
+    volumes:
+      - type: bind
+        source: nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+    ports:
+      - protocol: TCP
+        target: 80
+        published: 80
+
 networks:
   gitforgex.network:
     name: gitforgex.network

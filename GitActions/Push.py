@@ -101,10 +101,20 @@ class Push:
         
     def get_post_cmd(self, filepath, filehash):
         try:            
+            # cmd = [
+            #     "curl",
+            #     "-X", "POST",
+            #     "http://localhost:8000/post",
+            #     "-F", f"upload=@{filepath}",
+            #     "-F", f"commit_hash={self.commit_hash}",
+            #     "-F", f"filehash={filehash}",
+            #     "-F", f"commitmsg={self.commit_msgs}"
+            # ]
+
             cmd = [
                 "curl",
                 "-X", "POST",
-                "http://localhost:8000/post",
+                "http://localhost:80/post",
                 "-F", f"upload=@{filepath}",
                 "-F", f"commit_hash={self.commit_hash}",
                 "-F", f"filehash={filehash}",

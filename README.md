@@ -1,7 +1,8 @@
 # GitForgeX-Custom-Version-Control-System
 A Git-inspired version control system focusing on secure client–server interaction and modular service-based architecture.
 
-![alt text](gitforgex-architecture-1.png)
+<!-- ![alt text](gitforgex-architecture-1.png) -->
+![alt text](gitforgex-architecture-2.png)
 
 **Question & Answers**
 
@@ -44,3 +45,17 @@ Database management systems
 Application frameworks like Tornado
 Basic Git commands (add, stage, commit, push, clone, cherry-pick)
 
+Q: What new enhancements were added?
+A reset action and an NGINX reverse proxy were added.
+
+Q: Why was the reset action introduced?
+To revert the repository to a previous state and improve control and reliability.
+
+Q: Why use an NGINX reverse proxy?
+To act as a secure single entry point and manage request routing.
+
+Q: Does the client connect directly to the API server?
+No, all client requests go through NGINX.
+
+Q: What is the main benefit of this enhancement?
+Improved security, cleaner architecture, and better scalability.
