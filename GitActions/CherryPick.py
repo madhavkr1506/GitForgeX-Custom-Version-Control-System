@@ -28,7 +28,7 @@ class CherryPickCommit:
 
     def store_cherry_pick_commit(self):
         try:
-            for filepath in self.working_module.iterdir():
+            for filepath in self.working_module.glob("**/*"):
                 if filepath.is_dir() or "cache" in str(filepath):
                     continue
                 self.working_node.reading_node_state(filepath=filepath)
@@ -46,7 +46,7 @@ class CherryPickCommit:
             if len(self.commits_repo) == 0:
                 self.log.warning(f"no commits found to restore")
                 return
-            print("input commit hash: ", end="\t")
+            print("input commit hash: ", end="\t", flush=True)
             self.user_commit_hash_preference = sys.stdin.readline().strip()
             if len(self.user_commit_hash_preference) > 0:
                 self.user_selected_preference = True
@@ -63,7 +63,7 @@ class CherryPickCommit:
                 "GET",
                 f"http://localhost:8000/get",
                 "-F", f"filehash={filehash}",
-                "-F", f"commit_hash={self.user_commit_hash_preference}"
+                "-F", f"commit_hash={self.user_commit_hash_preference}",
                 "-o", f"{outputpath}"
             ]
             self.log.info(f"command prepared: {cmd}")
