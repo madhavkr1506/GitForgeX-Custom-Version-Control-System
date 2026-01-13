@@ -110,7 +110,7 @@ class UserAction:
                     case "clone":
                         GitClone()
                     case "cherry-pick":
-                        PickCommit().run()
+                        CherryPickCommit().run()
                     case "revert":
                         pass
                     case "reset":
