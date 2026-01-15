@@ -1,0 +1,5 @@
+FROM fluent/fluentd:latest
+
+USER root
+
+RUN apt update -y && apt install -y curl netcat-openbsd

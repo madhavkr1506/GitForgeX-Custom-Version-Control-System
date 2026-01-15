@@ -23,7 +23,16 @@ services:
         required: true
     restart: unless-stopped
     depends_on:
-      - dbserver
+      nginx.server:
+        condition: service_started
+      fluentd.server:
+        condition: service_healthy
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 10.0.0.24:24224
+        tag: api.server
+        
   
   dbserver:
     build:
@@ -63,6 +72,19 @@ services:
       timeout: 30s
       retries: 3
       start_period: 5s
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 10.0.0.24:24224
+        tag: db.server
+        
+    depends_on:
+      nginx.server:
+        condition: service_started
+      fluentd.server:
+        condition: service_healthy
+      gitserver:
+        condition: service_started
     restart: unless-stopped
 
   nginx.server:
@@ -80,7 +102,60 @@ services:
       - protocol: TCP
         target: 80
         published: 80
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 10.0.0.24:24224
+        tag: nginx.server
+        
+    depends_on:
+      fluentd.server:
+        condition: service_healthy
+        
+    restart: unless-stopped
+  fluentd.server:
+    build: 
+      context: .
+      dockerfile: Dockerfile.fluentd
+    image: fluentd-gitforgex
+    container_name: fluentd
+    networks:
+      gitforgex.network:
+        ipv4_address: 10.0.0.24
+    ports:
+      - protocol: TCP
+        target: 24224
+        published: 24224
+      - protocol: TCP
+        target: 9880
+        published: 9880
+    volumes:
+      - type: bind
+        source: ./SystemLogs/api.server.logs/
+        target: /fluentd/log/api/
+        read_only: false
 
+      - type: bind
+        source: ./SystemLogs/db.server.logs/
+        target: /fluentd/log/db/
+        read_only: false
+
+      - type: bind
+        source: ./SystemLogs/nginx.server.logs/
+        target: /fluentd/log/nginx/
+        read_only: false
+
+      - type: bind
+        source: fluent.conf
+        target: /fluentd/etc/fluent.conf
+        read_only: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "24224"]
+      interval: 10s
+      timeout: 10s
+      retries: 2
+        
 networks:
   gitforgex.network:
     name: gitforgex.network
