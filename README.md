@@ -2,7 +2,7 @@
 A Git-inspired version control system focusing on secure client–server interaction and modular service-based architecture.
 
 <!-- ![alt text](gitforgex-architecture-1.png) -->
-![alt text](gitforgex-architecture-2.png)
+![alt text](gitforgex-architecture-3.png)
 
 **Question & Answers**
 
@@ -59,3 +59,12 @@ No, all client requests go through NGINX.
 
 Q: What is the main benefit of this enhancement?
 Improved security, cleaner architecture, and better scalability.
+
+Q1: Which services are generating and storing logs?
+NGINX, the API Server, and ClickHouse all generate and send their logs independently to the logging pipeline. Each service maintains its own log stream for clear separation and easier debugging.
+
+Q2: Why are logs not merged into a single file?
+Logs are kept separate to preserve service-level clarity. Like independent variables in mathematics, separate logs reduce noise and simplify root-cause analysis.
+
+Q3: How are failure and scaling handled in the current phase?
+In the current early stage, logs are not stored during failures and no scaling is applied. These concerns are planned for future iterations as the system evolves.
