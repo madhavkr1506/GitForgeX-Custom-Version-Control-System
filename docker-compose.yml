@@ -4,7 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.python
-    
     image: gitforgex:1
     container_name: gitforgex
     ports:
@@ -23,9 +22,13 @@ services:
         required: true
     restart: unless-stopped
     depends_on:
-      nginx.server:
-        condition: service_started
       fluentd.server:
+        condition: service_healthy
+      key.authentication:
+        condition: service_healthy
+      nginx.server:
+        condition: service_healthy
+      dbserver:
         condition: service_healthy
     logging:
       driver: fluentd
@@ -33,7 +36,6 @@ services:
         fluentd-address: 10.0.0.24:24224
         tag: api.server
         
-  
   dbserver:
     build:
       context: .
@@ -68,8 +70,8 @@ services:
         ipv4_address: 10.0.0.21
     healthcheck:
       test: ["CMD-SHELL", "clickhouse-client --query 'select 1'"]
-      interval: 30s
-      timeout: 30s
+      interval: 10s
+      timeout: 10s
       retries: 3
       start_period: 5s
     logging:
@@ -77,14 +79,13 @@ services:
       options:
         fluentd-address: 10.0.0.24:24224
         tag: db.server
-        
     depends_on:
-      nginx.server:
-        condition: service_started
       fluentd.server:
         condition: service_healthy
-      gitserver:
-        condition: service_started
+      key.authentication:
+        condition: service_healthy
+      nginx.server:
+        condition: service_healthy
     restart: unless-stopped
 
   nginx.server:
@@ -102,22 +103,29 @@ services:
       - protocol: TCP
         target: 80
         published: 80
+    networks:
+      gitforgex.network:
+        ipv4_address: 10.0.0.23
     logging:
       driver: fluentd
       options:
         fluentd-address: 10.0.0.24:24224
         tag: nginx.server
-        
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
     depends_on:
       fluentd.server:
         condition: service_healthy
-        
     restart: unless-stopped
+
   fluentd.server:
     build: 
       context: .
       dockerfile: Dockerfile.fluentd
-    image: fluentd-gitforgex
+    image: fluentd-gitforgex:1
     container_name: fluentd
     networks:
       gitforgex.network:
@@ -146,6 +154,11 @@ services:
         read_only: false
 
       - type: bind
+        source: ./SystemLogs/key.auth.logs/
+        target: /fluentd/log/auth/
+        read_only: false
+
+      - type: bind
         source: fluent.conf
         target: /fluentd/etc/fluent.conf
         read_only: true
@@ -155,7 +168,37 @@ services:
       interval: 10s
       timeout: 10s
       retries: 2
-        
+
+  key.authentication:
+    image: key.authentication:1
+    container_name: key.authentication
+    build:
+      context: .
+      dockerfile: Dockerfile.key.authentication
+    ports:
+      - protocol: TCP
+        target: 8080
+        published: 8080
+    networks:
+      gitforgex.network:
+        ipv4_address: 10.0.0.25
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -X GET http://10.0.0.23:80/auth_server_health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 10.0.0.24:24224
+        tag: key.verification
+    depends_on:
+      fluentd.server:
+        condition: service_healthy
+      nginx.server:
+        condition: service_healthy
+    restart: unless-stopped
+          
 networks:
   gitforgex.network:
     name: gitforgex.network

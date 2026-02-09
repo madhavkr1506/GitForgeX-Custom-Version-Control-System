@@ -9,7 +9,6 @@ class Push:
     def __init__(self):
         self.log = PrintLog()
         self.log = self.log.log
-
         self.contents = {}
 
         self.worktreepath = Path("./.gitforgex/")
@@ -18,13 +17,11 @@ class Push:
         self.commit_msgs = None
 
         self.post_command = None
-
         self.push_status = False
 
     def run(self):
-        flag = self.validate_identity_with_handshake()
-        flag = True
-        if flag:
+        status = self.validate_identity_with_handshake()
+        if status:
             steps = [self.find_commit_hash_and_commit_message, self.push_event_util, self.changing_entry_state]
             for step in steps:
                 step()
@@ -37,7 +34,7 @@ class Push:
             for fun in funcs:
                 fun()
             
-            return True
+            return self.handshake.handshake_status
 
         except Exception as e:
             self.log.error(
@@ -100,17 +97,7 @@ class Push:
             self.log.info(f"commit hash list: {commit_hash_list}\ncommit msgs list: {commit_msgs_list}")
         
     def get_post_cmd(self, filepath, filehash):
-        try:            
-            # cmd = [
-            #     "curl",
-            #     "-X", "POST",
-            #     "http://localhost:8000/post",
-            #     "-F", f"upload=@{filepath}",
-            #     "-F", f"commit_hash={self.commit_hash}",
-            #     "-F", f"filehash={filehash}",
-            #     "-F", f"commitmsg={self.commit_msgs}"
-            # ]
-
+        try: 
             cmd = [
                 "curl",
                 "-X", "POST",

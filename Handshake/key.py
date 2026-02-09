@@ -4,6 +4,7 @@ import json
 import subprocess
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
+from Logging import PrintLog
 
 class KeyGeneration:
     def __init__(self):
@@ -16,18 +17,18 @@ class KeyGeneration:
         self.signatures = None
         self.handshake_digest = None
         self.handshake_digest_hex = None
+        self.log = PrintLog()
+        self.log = self.log.log
+
+        self.handshake_status = False
 
     def run(self):
         print(f"input password: ", end="\t", flush=True)
         self.password = str(sys.stdin.readline()).strip()
         self.password = self.password.encode("UTF-8")
-        print(f"password entered: {self.password}")
-
         steps = [self.adjust_private_key_params, self.adjust_private_bytes_params, self.adjust_public_bytes_params, self.adjust_private_key_sign_params]
-
         for step in steps:
             step()
-
         self.call_keystores()
 
     def adjust_private_key_params(self):
@@ -59,26 +60,14 @@ class KeyGeneration:
                 key_size=self.key_size
             )
             self.privatekey = key
-
             key = None
-
             if self.privatekey is not None:
                 key = self.privatekey.public_key()
                 self.public_key = key
-
             key = None
-            print({
-                "response": "private key and public is generated",
-                "r_status": "success"
-            }, flush=True)
+            self.log.info(f"private and public keys are generated")
         except Exception as e:
-            raise Exception(
-                {
-                    "response": f"failed to generate public key and private key: {str(e)}",
-                    "r_status": "failed"
-                }
-            )
-        
+            self.log.error(f"problem.generate_key: {str(e)}")
 
     def call_keystores(self):
         try:
@@ -89,93 +78,56 @@ class KeyGeneration:
             
             if self.privatekey is None and self.public_key is None:
                 self.getnerate_keys()
-
             pem = None
             pem = self.privatekey.private_bytes(
                 encoding=self.prencoding,
                 format=self.prformat,
                 encryption_algorithm=self.prencryption_algorithm
             )
-            
             with open(file=self.privatekey_store, mode="wb") as prfile:
                 prfile.write(pem)
             prfile.close()
             pem = None
-
             pem = self.public_key.public_bytes(
                 encoding=self.puencoding,
                 format=self.puformat,
             )
-
             with open(file=self.public_key_store, mode="wb") as pufile:
                 pufile.write(pem)
-            
             pufile.close()
-
             pem = None
-
-            print({
-                "response": "private key and public key is stored inside keystores",
-                "r_status": "success"
-            }, flush=True)
-            
+            self.log.info(f"private and public keys are stored inside keystores")
         except Exception as e:
-            raise Exception(
-                {
-                    "response": f"private key and public is not stored: {str(e)}",
-                    "r_status": "failed"
-                }
-            )
+            self.log.error(f"problem.call_keystores: {str(e)}")
         
     def load_keys(self):
         try:
             if not os.path.exists(self.privatekey_store) and not os.path.exists(self.public_key_store):
                 self.call_keystores()
-
             pem = None
             key = None
-
             with open(file=self.privatekey_store, mode="rb") as prfile:
                 pem = prfile.read()
-            
             prfile.close()
 
             key = serialization.load_pem_private_key(
                 data=pem, password=self.password
             )
-
             self.privatekey = key
-
             pem = None
             key = None
-
             with open(file=self.public_key_store, mode="rb") as pufile:
                 pem = pufile.read()
-
             pufile.close()
-
             key = serialization.load_pem_public_key(
                 data=pem
             )
-
             self.public_key = key
-
             pem = None
             key = None
-
-            print(
-                {
-                    "response": "private key and public key are loaded",
-                    "r_status": "success"
-                }
-                ,flush=True)
+            self.log.info(f"private and public keys are loaded")
         except Exception as e:
-            raise Exception(
-                {
-                    "response": f"public key and private key are not loaded: {str(e)}",
-                    "r_status": "failed"
-                }
-            )
+            self.log.error(f"problem.load_keys: {str(e)}")
         
     def build_hashdigest(self, message : str):
         hash_ = hashes.Hash(algorithm=hashes.SHA256())
@@ -198,162 +150,67 @@ class KeyGeneration:
                 algorithm=self.pralgorithm
             )
             self.signatures = self.signatures.hex()
-            print({
-                "response": "signature added over handshake message",
-                "r_status": "success"
-            }, flush=True)
+            self.log.info(f"signature added on handshake message: {self.signatures}")
         except Exception as e:
-            raise Exception(
-                {
-                    "response": f"failed to put signature on data: {str(e)}",
-                    "r_status": "failed"
-                }
-            )
+            self.log.error(f"problem.put_privatekey_signature: {str(e)}")
         
     def store_publickey_on_server(self):
         try:
             if not os.path.exists(path=self.public_key_store):
-                print(
-                    {
-                        "response": "public key store is missing",
-                        "r_status": "failed"
-                    },
-                    flush=True
-                )
                 self.call_keystores()
-
             cmd = None
-
             def prepare_cmd():
                 cmd_ = [
                     "curl", 
                     "-X", "POST", 
-                    "http://localhost:8000/store-pu-key",
+                    "http://localhost:80/auth_server_store_key",
                     "-F", f"upload=@{self.public_key_store}"
                 ]
                 return cmd_
-            
             cmd = prepare_cmd()
-
-            print(f"storing public key on server: {cmd}")
-
+            self.log.info(f"storing public key on server: {cmd}")
             response = subprocess.run(args=cmd, text=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             if response.returncode == 0:
-                response, r_status = self.phrase_server_response(response.stdout)
-
-                if r_status:
-                    print(
-                        {
-                            "response": f"reading response from server: {response}",
-                            "r_status": "success"
-                        }
-                    )
-                if not r_status:
-                    print(
-                        {
-                            "response": f"reading response from server: {response}",
-                            "r_status": "failed"
-                        }
-                    )
+                if isinstance(response.stdout, str):
+                    response = json.loads(response.stdout)
+                status = True if response.get("status") == "success" else False
+                self.log.info(f"status: {status}")
             else:
-                print(
-                    {
-                        "response": f"failed in reading response from server: {response.stderr}",
-                        "r_status": "failed"
-                    }
-                )
-
-
+                self.log.info(f"response standard error: {response.stderr}")
         except Exception as e:
-            raise Exception(
-                {
-                    "response": f"public key is not stored on server: {str(e)}",
-                    "r_status": "failed"
-                }
-            )
+            self.log.error(f"problem.store_publickey_on_server: {str(e)}")
         
     def do_handshake(self):
+        status = False
         try:
-            print(f"input handshake message: ", end="\t", flush=True)
-            handshake_msg = sys.stdin.readline().strip()
-            print(f"handshake message entered: {handshake_msg}")
-
+            handshake_msg = f"handshake - {sys.platform}"
+            self.log.info(f"handshake message: {handshake_msg}")
             self.put_privatekey_signature(handshake_msg=handshake_msg)
-
             def prepare_cmd():
                 cmd = [
                     "curl",
                     "-X", "GET",
-                    "-H", f"signatures: {self.signatures}",
-                    "-H", f"valmessage: {self.handshake_digest.hex()}",
-                    "http://localhost:8000/handshake"
+                    "-H", f"signature: {self.signatures}",
+                    "-H", f"input_msg: {self.handshake_digest.hex()}",
+                    "http://localhost:80/auth_server_validate_sign"
                 ]
-
                 return cmd
-            
             cmd = None
             cmd = prepare_cmd()
-
             response = None
-            print(f"handshake command: {cmd}")
+            self.log.info(f"handshake command: {cmd}")
             response = subprocess.run(args=cmd, text=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             if response.returncode == 0:
-                
-                response, r_status = self.phrase_server_response(response.stdout)
-                if r_status:
-                    print(
-                        {
-                            "response": f"reading response from server: {response}",
-                            "r_status": "success"
-                        }
-                    )
-                if not r_status:
-                    print(
-                        {
-                            "response": f"reading response from server: {response}",
-                            "r_status": "failed"
-                        }
-                    )
+                self.log.info(f"standard output: {response.stdout}\ttype: {type(response.stdout)}")
+                if isinstance(response.stdout, str):
+                    response = json.loads(response.stdout)
+                status = True if response.get("status") == "allowed" else False
+                self.log.info(f"status: {status}")
+                if not status:
                     self.store_publickey_on_server()
             else:
-                print(
-                    {
-                        "response": f"failed in reading response from server: {response.stderr}",
-                        "r_status": "failed"
-                    }
-                )
-
+                self.log.info(f"response standard error: {response.stderr}")
         except Exception as e:
-            raise Exception({
-                "response": f"handshake failed with server: {str(e)}",
-                "r_status": "failed"  
-            })
-        
-    
-    def phrase_server_response(self, server_response):
-        try:
-            response = None
-            r_status = None
-            if not server_response:
-                print(
-                    {
-                        "response": "server response is None",
-                        "r_status": "failed"
-                    }, flush=True
-                )
-                return
-            else:
-                if isinstance(server_response, str):
-                    server_response = json.loads(server_response)
-                response = server_response.get("response")
-                r_status = True if server_response.get("b_status") == "success".lower() else False
-
-            return response, r_status
-
-        except Exception as e:
-            raise Exception(
-                {
-                    "response": f"failed to read response from server: {str(e)}",
-                    "r_status": "success"
-                }
-            )
+            self.log.error(f"problem.do_handshake: {str(e)}")
+        finally:
+            self.handshake_status = status

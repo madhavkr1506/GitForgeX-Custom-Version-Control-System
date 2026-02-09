@@ -6,6 +6,10 @@ from tornado import ioloop
 from Identity.botVerification import Verification
 from Actions.botAction import *
 
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+log = logging.getLogger(__name__)
+
 class MainHandler(web.RequestHandler):
     def initialize(self):
         self.robot = BotHandler()
@@ -14,22 +18,19 @@ class MainHandler(web.RequestHandler):
 
     def get(self):
         verification = Verification(verify_bot=True)
-        response = verification.verify_robot_identity()
-        if response.get("status") == "success":
-            print(f"success verification: {response}", flush=True)
+        code = verification.verify_robot_identity()
+        if code == 0:
+            log.info(f"successful verification. bot identity is verified")
             filehash = self.get_body_argument(name="filehash", default="not found", strip=True)
             if filehash == "not found":
-                print(f"filehash is not given. using commit hash", flush=True)
+                log.info(f"filehash is not given. using commit hash")
             self.filehash = filehash
             commit_hash = self.get_body_argument(name="commit_hash", default="not found", strip=True)
             if commit_hash == "not found":
-                print(f"commit hash is not given", flush=True)
+                log.info(f"commit hash is not given")
             self.commit_hash = commit_hash
             if len(self.filehash) == 0 and len(self.commit_hash) == 0:
-                self.write(chunk={
-                    "response": "invalid parameter. get operation failed",
-                    "b_status": "failed"
-                })
+                self.write(chunk={"status": 1})
                 return
 
             rows = self.robot.select_fromdb(commithash=commit_hash)
@@ -53,97 +54,29 @@ class MainHandler(web.RequestHandler):
                 return
             self.finish()
         else:
-            print(f"failed verification: {response}", flush=True)
-            self.write(response)
+            log.warning(f"bot identity is not verified")
 
     def post(self):
         verification = Verification(verify_bot=True)
-        response = verification.verify_robot_identity()
-        if response.get("status") == "success":
-            print(f"success verification: {response}", flush=True)
+        code = verification.verify_robot_identity()
+        if code == 0:
+            log.info(f"successful verification. bot identity is verified")
             commithash = self.get_body_argument("commit_hash")
             filehash = self.get_body_argument("filehash")
             commitmsg = self.get_body_argument("commitmsg")
             filepath = f"./snapshots/{filehash}"
-            print(
-                json.dumps(
-                    {
-                        "commit hash": f"{commithash}",
-                        "file hash": f"{filehash}",
-                        "commit message": f"{commitmsg}",
-                        "remote file path": f"{filepath}"
-                    }, indent=4, sort_keys=True
-                ), flush=True
-            )
-
+            log.info(f"filepath={filepath}\tfilehash={filehash}\tcommit hash={commithash}")
             body = self.request.files.get("upload")[0].get("body")
             if body is not None:
                 with open(file=filepath, mode="wb") as f:
                     f.write(body)
-                response = {
-                    "message": f"{filepath} has been saved successfully",
-                    "status": "success"
-                }
                 self.robot.insert_indb(commithash=commithash, fileshash=filehash, commitmsg=commitmsg)
-                self.write(json.dumps(response, indent=4))
+                self.write({"status": 0})
             else:
-                response = {
-                    "message": f"{filepath} is not saved successfully as body is None",
-                    "status": "failure"
-                }
-                self.write(json.dumps(response, indent=4))
-            
+                log.warning(f"fetched body is none")
+                self.write({"status": 1})
         else:
-            print(f"failed verification: {response}", flush=True)
-            self.write(response)
-
-class HandshakeHandler(web.RequestHandler):
-    def initialize(self):
-        self.headers = self.request.headers
-        print(self.headers, flush=True)
-
-        signature = self.headers.get("signatures", None)
-        vamessage = self.headers.get("valmessage", None)
-        print({
-            "server received": {
-                "signature": signature,
-                "vamessage": vamessage
-            }
-        }, flush=True)
-        if signature is not None and vamessage is not None:
-            self.handshake = Handshake(signature=signature, vamessage=vamessage)
-
-    def get(self):
-        response = self.handshake.validate_signature()
-        self.write(response)
-
-    def post(self):
-        upload = self.request.files.get("upload")
-        print(
-            {
-                "upload": upload 
-            }, flush=True
-        )
-        filebody = upload[0].get("body")
-        print(
-            {
-                "filebody": filebody
-            }, flush=True
-        )
-        with open(file="/src/app/.git/Keystores/publickey.pem", mode="wb") as pufile:
-            pufile.write(filebody)
-        
-        pufile.close()
-
-        self.write(
-            json.dumps(
-                {
-                    "response": "congratulation::) public key is store on server and ready to validate signature",
-                    "b_status": "success"
-                }, indent=4
-            ),
-        )
-
+            log.warning(f"bot identity is not verified")
     
 class TestHandler(web.RequestHandler):
     def initialize(self):
@@ -152,44 +85,27 @@ class TestHandler(web.RequestHandler):
 
 
     def get(self):
-        response = self.verification.verify_robot_identity()
-        if response.get("status") == "success":
-            print(
-                json.dumps(
-                    {
-                        "response": f"verification success: {response}"
-                    }
-                ), flush=True
-            )
-            
-            response = self.dbconnection.test_session_reliablity()
-
-            print(
-                json.dumps(
-                    {
-                        "response": f"session connection : {response}"
-                    }
-                )
-                , flush=True)
-            self.set_status(200)
-            self.finish(f"ping received...")
+        code = self.verification.verify_robot_identity()
+        if code == 0:
+            log.info(f"bot verified")
+            code = self.dbconnection.test_session_reliablity()
+            if code == 0:
+                log.info(f"database connection is established")
+                self.set_status(200)
+                self.finish(f"ping received...")
+            else:
+                log.warning(f"database connection is not established")
+                self.set_status(403)
+                self.finish(f"ping not received...")
         else:
-            print(
-                json.dumps(
-                    {
-                        "response": f"verification failed: {response}"
-                    }
-                )
-                , flush=True)
-            self.write(response)
+            log.warning(f"bot unverified")
+            self.set_status(403)
 
 def make_app():
     return web.Application([
         (r"/", TestHandler),
         (r"/get", MainHandler),
-        (r"/post", MainHandler),
-        (r"/handshake", HandshakeHandler),
-        (r"/store-pu-key", HandshakeHandler)
+        (r"/post", MainHandler)
     ])
 
 def main():

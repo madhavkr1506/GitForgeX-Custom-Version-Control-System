@@ -11,9 +11,7 @@ from clickhouse_sqlalchemy import types
 
 from sqlalchemy import Select
 
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization, hashes
-
+import logging
 
 class MasterNode:
     def __init__(self, git_commit_msg : str = None, git_files_hash : List[str] = [], git_commithash : str = None):
@@ -23,6 +21,10 @@ class MasterNode:
 
 class DBConnection:
     def __init__(self):
+
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        self.log = logging.getLogger(__name__)
+
         self.db_engine = None
         self.db_session = None
         self.prepare_database_variables()
@@ -37,124 +39,66 @@ class DBConnection:
     def create_dbengine(self):
         try:
             connection_url = f"clickhouse+native://{self.database_user}:{self.db_password}@{self.db_hostipaddr}:{self.db_hostport}/{self.database_name}"
-            print(
-                json.dumps(
-                    {
-                        "response": f"connection url: {connection_url}"
-                    }
-                ), flush=True
-            )
-
+            self.log.info(f"connection url: {connection_url}")
             self.db_engine = create_engine(
                 url=connection_url,
                 echo=False
             )
-            return {
-                "response": f"database engine created",
-                "b_status": f"success" 
-            }
-
+            return 0
         except Exception as e:
-            print(json.dumps({
-                "response": f"database engine is not created: {str(e)}",
-                "b_status": f"failed" 
-            }, indent=4), flush=True)
+            self.log.error(f"problem.create_dbengine: {str(e)}")
+            return 1
         
     def create_dbsession(self):
         try:
-            if self.db_engine is None:
-                response = self.create_dbengine()
-                print(
-                    json.dumps(
-                        {
-                            "response": f"response: {response}"
-                        }
-                    ), flush=True
-                )
             if self.db_engine is not None:
-                print(json.dumps({
-                    "response": "database engine is already created",
-                    "b_status": "success"
-                }), flush=True)
+                self.log.info(f"database engine is already created: {self.db_engine}")
+            if self.db_engine is None:
+                code = self.create_dbengine()
+                if code == 0:
+                    self.log.info(f"database engine is created: {self.db_engine}")
             session = sessionmaker(
                 bind=self.db_engine,
                 expire_on_commit=False,
                 autoflush=True
             )
             self.db_session = session()
-            return {
-                "response": f"database session is created",
-                "b_status": "success"
-            }
+            return 0
         except Exception as e:
-            print(json.dumps({
-                "response": f"database session is not created: {str(e)}",
-                "b_status": "failed"
-            }, indent=4), flush=True)
+            self.log.error(f"problem.create_dbsession: {str(e)}")
+            return 1
 
     def test_session_reliablity(self):
         try:
-            if self.db_session is None:
-                response = self.create_dbsession()
-                print(
-                    json.dumps(
-                        {
-                            "response": f"response: {response}"
-                        }
-                    ), flush=True
-                )
-
             if self.db_session is not None:
-                print(json.dumps({
-                    "response": "database session is already initialized",
-                    "b_status": "success"
-                }, indent=4), flush=True)
-            
-            test_query = text("select version();")
-            time.sleep(10)
-            response = self.db_session.execute(test_query)
+                self.log.info(f"database session is already created: {self.db_session}")
+            if self.db_session is None:
+                code = self.create_dbsession()
+                if code == 0:
+                    self.log.info(f"database session is created: {self.db_session}")
+
+            random_query = text("select version();")
+            response = self.db_session.execute(random_query)
             row_record = response.fetchone()
-            print(
-                    json.dumps(
-                        {
-                            "response": f"response: {row_record}"
-                        }
-                    ), flush=True
-                )
+            self.log.info(f"fetched row record: {row_record}")
             self.db_session.commit()
             if row_record is not None:
-                return{
-                    "response": "session test completed",
-                    "b_status": "success"
-                }
-            return {
-                "response": "session test not completed",
-                "b_status": "failed"
-            }
+                return 0
+            return 1
         except Exception as e:
             if self.db_session is not None:
                 self.db_session.rollback()
                 self.db_session.close()
             if self.db_engine is not None:
                 self.db_engine.dispose()
-            print(
-                json.dumps(
-                    {
-                        "response": f"test session reliablity is not completed: {str(e)}",
-                        "b_status": "failed"
-                    }, indent=4
-                ), flush=True
-            )
+            self.log.error(f"problem.test_session_reliablity: {str(e)}")
         finally:
             if self.db_session is not None:
                 self.db_session.close()
             if self.db_engine is not None:
                 self.db_engine.dispose()
-        
-
 
 BASE = declarative_base()
-
 class ModelClass(BASE):
     __tablename__ = "gitmaster"
     __table_args__ = {"schema" : "gitforgex"}
@@ -190,27 +134,19 @@ class PrepareQuery:
 
 class BotHandler:
     def __init__(self):
+
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        self.log = logging.getLogger(__name__)
+
         self.master_node = None
         self.prepare_query = PrepareQuery()
         self.dbconnection = DBConnection()
-        response = self.dbconnection.create_dbsession()
-        print(
-            json.dumps(
-                {
-                    "response": f"database session response: {response}"
-                }, indent=4
-            ), flush=True
-        )
+        code = self.dbconnection.create_dbsession()
+        self.log.info(f"creating database session object")
         self.session = None
-        if response.get("b_status") == "success":
+        if code == 0:
             self.session = self.dbconnection.db_session
-            print(
-            json.dumps(
-                {
-                    "response": f"database session response: {str(self.session)}"
-                }, indent=4
-            ), flush=True
-        )
+            self.log.info(f"database session is created: {self.session}")
 
     def prepare_masternode(self, commithash, fileshash, commitmsg):
         try:
@@ -222,43 +158,21 @@ class BotHandler:
             if not all([
                 self.master_node.__dict__
             ]):
-                return {
-                    "response": "master node is not prepared. missing metadata",
-                    "b_status": "failed"
-                }
-            return {
-                    "response": "master node is prepared",
-                    "b_status": "success"
-                }
+                return 1
+            return 0
 
-            
         except Exception as e:
-            print(json.dumps({
-                "response": f"master node is not prepared: {str(e)}",
-                "b_status": "failed"
-            }, indent=4), flush=True)
+            self.log.error(f"problem.prepare_masternode: {str(e)}")
+            return 1
 
     def insert_indb(self, commithash, fileshash, commitmsg):
         try:
             if self.master_node is None:
-                response = self.prepare_masternode(commithash, fileshash, commitmsg)
-                print(
-                    json.dumps(
-                        {
-                            "response": f"prepare master node response: {response}"
-                        }, indent=4
-                    ), flush=True
-                )
-                if response.get("b_status") == "failed":
-                    print(
-                        json.dumps(
-                            {
-                                "response": f"prepare master node response: {response}"
-                            }, indent=4
-                        ), flush=True
-                    )
+                code = self.prepare_masternode(commithash, fileshash, commitmsg)
+                if code == 1:
+                    self.log.warning(f"master node not prepared: {self.master_node.__dict__}")
                     return
-
+            self.log.info(f"master node is prepared: {self.master_node.__dict__}")
             payload = {
                 "git_commithash": self.master_node.git_commithash,
                 "git_commit_msg": self.master_node.git_commit_msg,
@@ -266,158 +180,38 @@ class BotHandler:
             }
             self.prepare_query.prepare_insert()
             query = self.prepare_query.insert_query
-            print(
-                json.dumps(
-                    {
-                        "insert query": str(query),
-                        "db session": str(self.session) 
-                    }, indent=4
-                ), flush=True
-            )
+            self.log.info(f"insert query: {query}\tdatabase session: {self.session}")
             if self.session is not None:
                 response = self.session.execute(query, payload)
                 self.session.commit()
-                print(
-                    json.dumps(
-                        {
-                            "response received": str(response)
-                        }, indent=4
-                    ), flush=True
-                )
-                if response is not None:
-                    print(json.dumps({
-                        "response": "insert operation completed",
-                        "b_status": "success"
-                    }, indent=4), flush=True)
-                
+                self.log.info(f"response received after executing query: {response}")
+                if response is None:
+                    self.log.warning(f"insert operation not completed. response received: {response}")
         except Exception as e:
             if self.session:
                 self.session.rollback()
                 self.session.close()
-            print(json.dumps({
-                "response": f"insert operation is not completed: {str(e)}",
-                "b_status": "failed"
-            }, indent=4))
+            self.log.error(f"problem.insert_indb: {str(e)}")
 
     def select_fromdb(self, commithash):
         try:
             self.prepare_query.prepare_select(commithash=commithash)
             query = self.prepare_query.select_query
-            print(f"select query: {query}", flush=True)
+            self.log.info(f"select query: {query}\tdatabase session: {self.session}")
             if self.session:
                 response = self.session.execute(query)
-                print(f"response: {response}", flush=True)
-                print(f"response type: {type(response)}", flush=True)
+                self.log.info(f"response received after executing query: {response}")
                 rows = response.fetchall()
                 if rows:
                     for row in rows:
-                        print(f"fetched row: {row}", flush=True)
+                        self.log.info(f"fetched row record: {row}")
                 else:
-                    print(f"rows are not found: {rows}", flush=True)
+                    self.log.warning(f"select query is not completed. rows are not found: {rows}")
                 return rows
             else:
-                print(f"session is not initialized", flush=True)
+                self.log.warning(f"session is not created")
         except Exception as e:
             if self.session:
                 self.session.close()
-            print(json.dumps(
-                {
-                    "response": f"select operation not completed: {str(e)}",
-                    "b_status": "failed"
-                }, indent=4
-            ))
+            self.log.error(f"problem.select_fromdb: {str(e)}")
             
-class Handshake:
-    def __init__(self, signature : str = None, vamessage : str = None):
-        self.signature = signature
-        self.signature = bytes.fromhex(self.signature)
-        self.vamessage = vamessage
-        self.vamessage = bytes.fromhex(self.vamessage)
-
-        self.public_key_store = "/src/app/.git/Keystores/publickey.pem"
-        self.public_key = None
-        self.adjust_signatures_verification_params()
-
-    def adjust_signatures_verification_params(self):
-        self.pupadding = padding.PSS(mgf=padding.MGF1(algorithm=hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH)
-        self.pualgorithm = hashes.SHA256()
-
-    def load_keys(self):
-        try:
-            if not os.path.exists(self.public_key_store):
-                return {
-                    "response": f"public key is not found on server",
-                    "b_status": "failed"
-                }
-            
-            pem = None
-            key = None
-
-            with open(file=self.public_key_store, mode="rb") as pukey:
-                pem = pukey.read()
-            
-            pukey.close()
-
-            key = serialization.load_pem_public_key(
-                data=pem
-            )
-
-            self.public_key = key
-
-            key = None
-
-            return{
-                "response": f"public key: {self.public_key}\t public key type: {type(self.public_key)}",
-                "b_status": "success"
-            }
-
-            
-        except Exception as e:
-            print(json.dumps(
-                {
-                    "response": f"failed to check public key store point: {str(e)}",
-                    "b_status": "failed"
-                }, indent=4
-            ), flush=True)
-    
-    def validate_signature(self):
-        try:
-            if self.signature is None:
-                print({
-                    "response": f"signature not found",
-                    "b_status": "failed"
-                }, flush=True)
-            if self.public_key is None:
-                response = self.load_keys()
-                if response.get("b_status") == "success":
-                    print(
-                        json.dumps(
-                            {
-                                "response": response
-                            }, indent=4
-                        ), flush=True
-                    )
-                else:
-                    return{
-                        "response": f"public key is not found",
-                        "b_status": "failed"
-                    }
-
-            self.public_key.verify(
-                signature=self.signature,
-                data=self.vamessage,
-                padding=self.pupadding,
-                algorithm=self.pualgorithm
-            )
-            return {
-                "response": f"congratulation ::) you have been allowed to make push",
-                "b_status": "success"
-            }
-
-        except Exception as e:
-            print(json.dumps(
-                {
-                    "response": f"signature validation failed: {str(e)}",
-                    "b_status": "failed"
-                }, indent=4
-            ), flush=True)

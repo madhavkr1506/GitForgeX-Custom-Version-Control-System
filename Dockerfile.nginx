@@ -1,3 +1,11 @@
 FROM nginx:latest
 
 USER root
+
+RUN apt update -y && apt install curl adduser -y
+
+RUN groupadd -r helper && useradd -r -g helper bot
+
+RUN mkdir -p /home/bot
+
+RUN chown -R bot:helper /home/bot

@@ -33,7 +33,7 @@ class UserAction:
             response = subprocess.run(args=cmd, text=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             if response.returncode == 0:
                 self.log.info(json.dumps({
-                    "response" : "server is listening at port 8000",
+                    "response" : "nginx server is listening at port 80",
                     "u_status" : "success"
                 }, indent=4))
                 self.server_start_status = True
