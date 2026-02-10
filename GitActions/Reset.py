@@ -75,7 +75,7 @@ class GitReset:
                 cmd_ = [
                     "curl", 
                     "-X", "GET",
-                    f"http://localhost:8000/get",
+                    f"http://localhost:80/get",
                     "-F", f"filehash={self.user_preference_filehash}",
                     "-F", f"commit_hash={self.user_preference_commit_hash}",
                     "-o", f"{output_filepath}"
@@ -87,7 +87,6 @@ class GitReset:
 
                 cmd = prepare_cmd()
                 self.log.info(f"command prepare: {cmd}")
-
                 response = subprocess.run(args=cmd, text=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
                 if response.returncode == 0:
                     self.log.info(f"process has completed its execution: {response.args}")

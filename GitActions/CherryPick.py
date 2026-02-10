@@ -61,7 +61,7 @@ class CherryPickCommit:
                 "curl",
                 "-X",
                 "GET",
-                f"http://localhost:8000/get",
+                f"http://localhost:80/get",
                 "-F", f"filehash={filehash}",
                 "-F", f"commit_hash={self.user_commit_hash_preference}",
                 "-o", f"{outputpath}"

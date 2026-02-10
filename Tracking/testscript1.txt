@@ -1,2 +1,9 @@
 def print():
     print("My name is madhav kumar")
+
+class p:
+    
+    name = "Rohan"
+    @classmethod
+    def c_method(cls):
+        cls.name = "Madhav"

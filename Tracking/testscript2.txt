@@ -1,2 +1,10 @@
 def print():
     print("My name is krishn kumar")
+
+
+class a:
+    def __init__(self):
+        self.name = "Madhav kumar"
+
+    def getName() -> str:
+        return self.name
