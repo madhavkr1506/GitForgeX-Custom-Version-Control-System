@@ -1,14 +1,22 @@
 import json
 from pathlib import *
 from Logging import *
-
+from Metadata import MetaNodeStatus
+from core.container import WiredNode
 class NodeReferenceState:
     def __init__(self):
         log = PrintLog()
         self.log = log.log
-
         self.working_module = Path("./.gitforgex")
-        self.contents = {}
+        self.wiredNode:WiredNode = WiredNode()
+        self.curr:MetaNodeStatus = MetaNodeStatus()
+        self.prev:MetaNodeStatus = MetaNodeStatus()
+
+        self.setNode()
+
+    def setNode(self):
+        self.wiredNode.setNodeOrder(order="curr", node=self.curr, force=None)
+        self.wiredNode.setNodeOrder(order="prev", node=self.prev, force=None)
 
     def reading_node_state(self, filepath):
         try:

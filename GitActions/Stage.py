@@ -24,11 +24,11 @@ class Staging:
             if filepath.is_dir():
                 continue
             self.working_node.reading_node_state(filepath=filepath)
-            self.contents = self.working_node.contents  
+            self.contents = self.working_node.contents
 
             current_tracked = self.contents.get("current").get("tracked")
             last_tracked = self.contents.get("last").get("tracked")
-            last_committed = self.contents.get("last").get("committed")
+            last_committed = self.contents.get("last").get("commited")
 
             if (not current_tracked) and (not last_committed):
                 if (self.contents["current"]["staged"] and self.contents["current"]["modified"] and self.contents["current"]["tracked"]):

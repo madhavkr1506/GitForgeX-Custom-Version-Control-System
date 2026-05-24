@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 from Metadata import *
+from dataclasses import asdict
 from cryptography.hazmat.primitives import hashes
 
 from Logging import *
@@ -9,12 +10,9 @@ class AddActions:
     def __init__(self, path : Path = None):
         log = PrintLog()
         self.log = log.log
-
         self.entries = []
 
-        self.working_node = NodeReferenceState()
-
-        self.working_module = self.working_node.working_module
+        self.node = NodeReferenceState()
 
         self.list_allfiles(path=path)
         for filepath in self.entries:
@@ -29,8 +27,8 @@ class AddActions:
             else:
                 self.log.info(f"change found in file and filepath: {str(filepath)} and duplicate found: {duplicate_found}")
 
-            filenode = self.node_creation(filepath=filepath, filesize=filesize, filehash=filehash)
-            self.build_binary_object(filenode=filenode)
+            self.node_creation(filepath=str(filepath), filesize=filesize, filehash=filehash)
+            self.build_binary_object()
 
     def list_allfiles(self, path : Path) -> list:
         try:
@@ -84,8 +82,11 @@ class AddActions:
             if not all([filepath, filesize, filehash]):
                 self.log.error(f"node is not created. missing required fields filepath={filepath} filesize={filesize} filehash={filehash}")
                 return
-            filenode = MetaNode(path=str(filepath), size=filesize, hash_=filehash)
-            return filenode
+            # filenode = MetaNode(path=str(filepath), size=filesize, hash_=filehash)
+            # return filenode
+            self.node.curr.path = filepath
+            self.node.curr.size = filesize
+            self.node.curr.hash = filehash
 
         except Exception as e:
             self.log.error(f"node creation failed: {str(e)}")
@@ -94,7 +95,7 @@ class AddActions:
         try:
             duplicate_found = False
             filepathhash = self.fetch_filehash(contents=str(filepath))
-            filepath = Path(f"{self.working_module}/{filepathhash}/{filehash}.json")
+            filepath = Path(f"{self.node.working_module}/{filepathhash}/{filehash}.json")
             if os.path.exists(path=filepath):
                 duplicate_found = True
             return duplicate_found
@@ -103,15 +104,17 @@ class AddActions:
 
     def build_binary_object(self, filenode : MetaNode = None):
         try:
-            filepath = filenode.path
+            # filepath = filenode.path
+            filepath = self.node.curr.path
             filepathhash = self.fetch_filehash(contents=str(filepath))
-            dirpath = os.path.join(self.working_module, filepathhash)
+            dirpath = os.path.join(self.node.working_module, filepathhash)
             os.makedirs(name=dirpath, exist_ok=True)
-            filehash = filenode.current.get("hash")
-            filepath = os.path.join(self.working_module, filepathhash, f"{filehash}.json")
-            payload = filenode.__dict__
+            # filehash = filenode.current.get("hash")
+            filehash = self.node.curr.hash
+            filepath = os.path.join(self.node.working_module, filepathhash, f"{filehash}.json")
+            payload = asdict(self.node.curr)
             with open(file=filepath, mode="w") as jsonfile:
-                json.dump(payload, jsonfile, indent=4)
+                json.dump(payload, jsonfile, indent=4, default=str)
             jsonfile.close()
         except Exception as e:
             self.log.error(f"binary object is not created: {str(e)}")
